@@ -11,7 +11,7 @@
   "author": "",
   "license": "ISC",
   "engines": {
-    "node": "14.x"
+    "node": ">=14.0"
   },
   "dependencies": {
     "dotenv": "^8.2.0",
