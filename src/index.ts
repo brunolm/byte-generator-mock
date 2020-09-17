@@ -6,6 +6,8 @@ import { getInfo } from './services/voucher'
 
 const app = express()
 
+app.get('/_', (_, res) => res.sendStatus(200))
+
 app.get('/:cid/info', (req, res) => {
   const fileInfo = db.find(req.params.cid)
 
