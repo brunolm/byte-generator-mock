@@ -6,10 +6,10 @@
       "use": "@vercel/node"
     }
   ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/"
-    }
-  ]
+  "github": {
+    "enabled": true
+  },
+  "env": {
+    "CHUNK_SIZE": 1048576
+  }
 }
