@@ -8,3 +8,4 @@ node_modules/
 # misc
 npm-debug.log
 testem.log
+.env
