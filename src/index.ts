@@ -1,3 +1,4 @@
+import * as cors from 'cors'
 import * as express from 'express'
 
 import { env } from './config/env'
@@ -6,6 +7,7 @@ import { getInfo } from './services/voucher'
 
 const app = express()
 
+app.use(cors())
 app.get('/_', (_, res) => res.sendStatus(200))
 
 app.get('/:cid/info', (req, res) => {
