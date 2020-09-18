@@ -7,7 +7,7 @@ This is a temp mock project to test some stuff.
 GET `/<CID>/info`.
 
 ```bash
-curl https://byte-generator-mock.herokuapp.com/10mb/info
+curl https://byte-generator-mock.herokuapp.com/test.jpg/info
 ```
 
 ## Retrieving the first chunk of data
@@ -15,7 +15,7 @@ curl https://byte-generator-mock.herokuapp.com/10mb/info
 GET `/<CID>`
 
 ```bash
-curl https://byte-generator-mock.herokuapp.com/10mb --output temp
+curl https://byte-generator-mock.herokuapp.com/test.jpg --output temp
 ls -lh
 ```
 
@@ -24,6 +24,6 @@ ls -lh
 GET `/<CID>/<VOUCHER>`
 
 ```bash
-curl https://byte-generator-mock.herokuapp.com/10mb/1 --output temp
+curl https://byte-generator-mock.herokuapp.com/test.jpg/1 --output temp
 ls -lh
 ```

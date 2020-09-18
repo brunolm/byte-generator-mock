@@ -1,5 +1,6 @@
 import * as cors from 'cors'
 import * as express from 'express'
+import * as fs from 'fs'
 
 import { env } from './config/env'
 import { db } from './database'
@@ -38,10 +39,21 @@ app.get('/:cid/:voucher?', (req, res) => {
     return res.sendStatus(404)
   }
 
-  // Generating mock response
-  const bytes = Buffer.from(`${req.params.voucher}`.repeat(env.chunkSize).slice(0, env.chunkSize), 'utf8')
+  let fd: number
+  try {
+    const fileToRead = `files/${req.params.cid}`
+    const buffer = Buffer.alloc(env.chunkSize)
 
-  res.send(bytes)
+    fd = fs.openSync(fileToRead, 'r')
+    fs.readSync(fd, buffer, 0, env.chunkSize, voucherInfo.chunk * env.chunkSize)
+
+    res.send(buffer)
+  } catch (err) {
+    console.log('err', err)
+    res.send(err)
+  } finally {
+    fs.closeSync(fd)
+  }
 })
 
 app.listen(env.server.port, '0.0.0.0', () => console.log(`Started. Port: ${env.server.port}`))
