@@ -1,79 +1,91 @@
-import * as cors from 'cors'
-import * as express from 'express'
 import * as fs from 'fs'
+import * as multiaddr from 'multiaddr'
+import * as peerId from 'peer-id'
 
-import { env } from './config/env'
-import { db } from './database'
-import { getInfo } from './services/voucher'
+import { createNode } from './services/create-node'
+import { sendMessage } from './services/send-message'
 
-const app = express()
+// /fil/simple-retrieval/0.1.0
 
-app.use(cors())
-app.get('/_', (_, res) => res.sendStatus(200))
+const start = async () => {
+  const [idDialer, idListener] = await Promise.all([
+    peerId.createFromJSON(require('./keys/dialer.json')),
+    peerId.createFromJSON(require('./keys/listener.json')),
+  ])
 
-app.get('/:cid/info', (req, res) => {
-  const fileInfo = db.find(req.params.cid)
+  const node = await createNode(idListener, 3001)
 
-  if (!fileInfo) {
-    return res.sendStatus(404)
-  }
-
-  res.send({
-    cid: req.params.cid,
-    fileInfo,
+  // Log a message when a remote peer connects to us
+  node.connectionManager.on('peer:connect', (connection) => {
+    console.log('connected to: ', connection.remotePeer.toB58String())
   })
-})
 
-// voucher is not require for first chunk
-app.get('/:cid/:voucher?', (req, res) => {
-  const fileInfo = db.find(req.params.cid)
+  await node.handle('/fil/simple-retrieval/0.1.0', async ({ stream }) => {
+    // streamToConsole(stream)
+    console.log('stream', stream)
 
-  if (!fileInfo) {
-    return res.sendStatus(404)
-  }
+    let response = Buffer.from('')
+    for await (const data of stream.source) {
+      const chunk = Buffer.isBuffer(data) ? data : data.slice()
 
-  // ASSUMPTION: get chunk number from voucher
-  const voucherInfo = getInfo(req.params.voucher)
-
-  if (!voucherInfo.valid) {
-    return res.sendStatus(404)
-  }
-
-  let fd: number
-  try {
-    const fileToRead = `files/${req.params.cid}`
-    const totalFileSize = fs.statSync(fileToRead).size
-    const offset = voucherInfo.chunk * env.chunkSize
-
-    console.log('totalFileSize', totalFileSize)
-    console.log('offset', offset)
-    console.log('env.chunkSize', env.chunkSize)
-
-    const max = totalFileSize - offset + env.chunkSize
-    const alloc = max > 0 ? Math.min(env.chunkSize, max) : env.chunkSize
-
-    if (totalFileSize < offset) {
-      console.log('No more data')
-
-      return res.send(null)
+      response = Buffer.concat([response, chunk])
     }
 
-    console.log('alloc', alloc)
+    const message = JSON.parse(response.toString())
 
-    const buffer = Buffer.alloc(alloc)
+    console.log('message.type', message.type)
 
-    fd = fs.openSync(fileToRead, 'r')
-    fs.readSync(fd, buffer, 0, env.chunkSize, offset)
+    switch (message.type) {
+      case 'GET_FILESIZE':
+        sendMessage(stream, { size: fs.statSync(`files/${message.cid}`).size })
+        break
 
-    res.send(buffer)
-  } catch (err) {
-    console.log('err', err)
-    res.send(err)
-  } finally {
-    if (fd) {
-      fs.closeSync(fd)
+      case 'GET_CHUNK':
+        const validateVoucher = (x) => !x || +x >= 0
+
+        if (!validateVoucher(message.voucher)) {
+          console.log('voucher not valid, needs to be a number >= 0')
+          break
+        }
+
+        sendMessage(stream, {
+          data: message.voucher,
+        })
+        break
     }
-  }
-})
 
-app.listen(env.server.port, '0.0.0.0', () => console.log(`Started. Port: ${env.server.port}`))
+    console.log('data received', response.toString())
+  })
+
+  // start libp2p
+  await node.start()
+  console.log('libp2p has started')
+
+  // print out listening addresses
+  console.log('listening on addresses:')
+  node.multiaddrs.forEach((addr) => {
+    console.log(`${addr.toString()}/p2p/${node.peerId.toB58String()}`)
+  })
+
+  // ping peer if received multiaddr
+  if (process.argv.length >= 3) {
+    const ma = multiaddr(process.argv[2])
+    console.log(`pinging remote peer at ${process.argv[2]}`)
+    const latency = await node.ping(ma)
+    console.log(`pinged ${process.argv[2]} in ${latency}ms`)
+  } else {
+    console.log('no remote peer address given, skipping ping')
+  }
+
+  const stop = async () => {
+    // stop libp2p
+    await node.stop()
+    console.log('libp2p has stopped')
+    process.exit(0)
+  }
+
+  process.on('SIGTERM', stop)
+  process.on('SIGINT', stop)
+}
+
+start()
