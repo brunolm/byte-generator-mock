@@ -45,12 +45,20 @@ app.get('/:cid/:voucher?', (req, res) => {
     const totalFileSize = fs.statSync(fileToRead).size
     const offset = voucherInfo.chunk * env.chunkSize
 
+    console.log('totalFileSize', totalFileSize)
+    console.log('offset', offset)
+    console.log('env.chunkSize', env.chunkSize)
+
     const max = totalFileSize - offset + env.chunkSize
     const alloc = max > 0 ? Math.min(env.chunkSize, max) : env.chunkSize
 
-    if (totalFileSize < env.chunkSize * offset) {
+    if (totalFileSize < offset) {
+      console.log('No more data')
+
       return res.send(null)
     }
+
+    console.log('alloc', alloc)
 
     const buffer = Buffer.alloc(alloc)
 
@@ -62,7 +70,9 @@ app.get('/:cid/:voucher?', (req, res) => {
     console.log('err', err)
     res.send(err)
   } finally {
-    fs.closeSync(fd)
+    if (fd) {
+      fs.closeSync(fd)
+    }
   }
 })
 
