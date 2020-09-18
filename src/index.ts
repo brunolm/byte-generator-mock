@@ -42,10 +42,20 @@ app.get('/:cid/:voucher?', (req, res) => {
   let fd: number
   try {
     const fileToRead = `files/${req.params.cid}`
-    const buffer = Buffer.alloc(env.chunkSize)
+    const totalFileSize = fs.statSync(fileToRead).size
+    const offset = voucherInfo.chunk * env.chunkSize
+
+    const max = totalFileSize - offset + env.chunkSize
+    const alloc = max > 0 ? Math.min(env.chunkSize, max) : env.chunkSize
+
+    if (totalFileSize > env.chunkSize * offset) {
+      return res.sendStatus(404)
+    }
+
+    const buffer = Buffer.alloc(alloc)
 
     fd = fs.openSync(fileToRead, 'r')
-    fs.readSync(fd, buffer, 0, env.chunkSize, voucherInfo.chunk * env.chunkSize)
+    fs.readSync(fd, buffer, 0, env.chunkSize, offset)
 
     res.send(buffer)
   } catch (err) {
