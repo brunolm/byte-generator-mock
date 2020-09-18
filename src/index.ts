@@ -48,8 +48,8 @@ app.get('/:cid/:voucher?', (req, res) => {
     const max = totalFileSize - offset + env.chunkSize
     const alloc = max > 0 ? Math.min(env.chunkSize, max) : env.chunkSize
 
-    if (totalFileSize > env.chunkSize * offset) {
-      return res.sendStatus(404)
+    if (totalFileSize < env.chunkSize * offset) {
+      return res.send(null)
     }
 
     const buffer = Buffer.alloc(alloc)
