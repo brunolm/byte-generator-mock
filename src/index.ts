@@ -1,10 +1,12 @@
 import * as fs from 'fs'
-import * as multiaddr from 'multiaddr'
+import { pipe } from 'it-pipe'
+import * as pushable from 'it-pushable'
 import * as peerId from 'peer-id'
 
 import { config } from './config'
 import { createNode } from './services/create-node'
-import { sendMessage } from './services/send-message'
+import { parse } from './services/json-stream/parse'
+import { stringify } from './services/json-stream/stringify'
 
 const start = async () => {
   const [idDialer, idListener] = await Promise.all([
@@ -20,64 +22,46 @@ const start = async () => {
   })
 
   await node.handle(config.protocolName, async ({ stream }) => {
-    // streamToConsole(stream)
-    console.log('stream', stream)
+    console.log(' @@@@@@@@@@@@@ HANDLE @@@@@@@@@@@@@@ ')
+    const sink = (pushable as any)()
 
-    let response = Buffer.from('')
-    for await (const data of stream.source) {
-      const chunk = Buffer.isBuffer(data) ? data : data.slice()
+    pipe(sink, stringify, stream, parse, async (source) => {
+      for await (const message of source) {
+        console.log('message', message)
 
-      response = Buffer.concat([response, chunk])
-    }
+        switch (message.type) {
+          case 'GET_FILESIZE':
+            sink.push({ size: fs.statSync(`files/${message.cid}`).size })
+            break
 
-    const message = JSON.parse(response.toString())
+          case 'GET_CHUNK':
+            const validateVoucher = (x) => !x || +x >= 0
 
-    console.log('message.type', message.type)
+            if (!validateVoucher(message.voucher)) {
+              console.log('voucher not valid, needs to be a number >= 0')
+              break
+            }
 
-    switch (message.type) {
-      case 'GET_FILESIZE':
-        sendMessage(stream, { size: fs.statSync(`files/${message.cid}`).size })
-        break
-
-      case 'GET_CHUNK':
-        const validateVoucher = (x) => !x || +x >= 0
-
-        if (!validateVoucher(message.voucher)) {
-          console.log('voucher not valid, needs to be a number >= 0')
-          break
+            sink.push({
+              data: message.voucher,
+            })
+            break
         }
+      }
 
-        sendMessage(stream, {
-          data: message.voucher,
-        })
-        break
-    }
-
-    console.log('data received', response.toString())
+      sink.end()
+    })
   })
 
-  // start libp2p
   await node.start()
   console.log('libp2p has started')
 
-  // print out listening addresses
   console.log('listening on addresses:')
   node.multiaddrs.forEach((addr) => {
-    console.log(`${addr.toString()}/p2p/${node.peerId.toB58String()}`)
+    console.log(`  -> ${addr.toString()}/p2p/${node.peerId.toB58String()}`)
   })
 
-  // ping peer if received multiaddr
-  if (process.argv.length >= 3) {
-    const ma = multiaddr(process.argv[2])
-    console.log(`pinging remote peer at ${process.argv[2]}`)
-    const latency = await node.ping(ma)
-    console.log(`pinged ${process.argv[2]} in ${latency}ms`)
-  } else {
-    console.log('no remote peer address given, skipping ping')
-  }
-
   const stop = async () => {
-    // stop libp2p
     await node.stop()
     console.log('libp2p has stopped')
     process.exit(0)

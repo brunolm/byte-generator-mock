@@ -1,9 +1,12 @@
 import * as multiaddr from 'multiaddr'
 import * as peerId from 'peer-id'
-import { config } from './config'
 
+import { config } from './config'
 import { createNode } from './services/create-node'
-import { sendMessage } from './services/send-message'
+import * as pushable from 'it-pushable'
+import { pipe } from 'it-pipe'
+import { stringify } from './services/json-stream/stringify'
+import { parse } from './services/json-stream/parse'
 
 async function run() {
   const [idDialer, idListener] = await Promise.all([
@@ -22,6 +25,13 @@ async function run() {
 
   const listenerMa = multiaddr(`/ip4/127.0.0.1/tcp/3001/p2p/${idListener.toB58String()}`)
   const { stream } = await nodeDialer.dialProtocol(listenerMa, config.protocolName)
+  const sink = (pushable as any)()
+
+  pipe(sink, stringify, stream, parse, async (source) => {
+    for await (const message of source) {
+      console.log('message', message)
+    }
+  })
 
   console.log(`Dialer dialed to listener on protocol: ${config.protocolName}`)
 
@@ -34,12 +44,22 @@ async function run() {
     getChunk: {
       type: 'GET_CHUNK',
       cid: 'test.jpg',
-      voucher: -1,
+      voucher: 1,
     },
   }
 
-  await sendMessage(stream, actions.getFileSize)
-  await sendMessage(stream, actions.getChunk)
+  sink.push(actions.getFileSize)
+  sink.push(actions.getChunk)
+
+  sink.end()
+
+  // const fileSizeObject = await sendMessage(sink, stream, actions.getFileSize)
+  // console.log('fileSizeObject', fileSizeObject)
+  // console.log()
+
+  // console.log('----------------> getChunk')
+  // // await stream.reset()
+  // await sendMessage(sink, stream, actions.getChunk)
 }
 
 run()
