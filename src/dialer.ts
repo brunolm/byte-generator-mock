@@ -1,12 +1,11 @@
+import * as fs from 'fs'
+import { pipe } from 'it-pipe'
+import * as pushable from 'it-pushable'
 import * as multiaddr from 'multiaddr'
 import * as peerId from 'peer-id'
 
 import { config } from './config'
 import { createNode } from './services/create-node'
-import * as pushable from 'it-pushable'
-import { pipe } from 'it-pipe'
-import { stringify } from './services/json-stream/stringify'
-import { parse } from './services/json-stream/parse'
 
 async function run() {
   const [idDialer, idListener] = await Promise.all([
@@ -27,12 +26,6 @@ async function run() {
   const { stream } = await nodeDialer.dialProtocol(listenerMa, config.protocolName)
   const sink = (pushable as any)()
 
-  pipe(sink, stringify, stream, parse, async (source) => {
-    for await (const message of source) {
-      console.log('message', message)
-    }
-  })
-
   console.log(`Dialer dialed to listener on protocol: ${config.protocolName}`)
 
   const actions = {
@@ -48,18 +41,40 @@ async function run() {
     },
   }
 
-  sink.push(actions.getFileSize)
-  sink.push(actions.getChunk)
+  sink.push(JSON.stringify(actions.getFileSize))
+
+  for (let i = 0; i <= 15; ++i) {
+    sink.push(
+      JSON.stringify({
+        ...actions.getChunk,
+        voucher: i,
+      }),
+    )
+    await new Promise((r) => setTimeout(r, 100))
+  }
 
   sink.end()
 
-  // const fileSizeObject = await sendMessage(sink, stream, actions.getFileSize)
-  // console.log('fileSizeObject', fileSizeObject)
-  // console.log()
+  let resultBuffer
+  await pipe(sink, stream, async (source) => {
+    for await (const message of source) {
+      if (resultBuffer) {
+        resultBuffer.append(message)
+      } else {
+        resultBuffer = message
+      }
+    }
+  })
 
-  // console.log('----------------> getChunk')
-  // // await stream.reset()
-  // await sendMessage(sink, stream, actions.getChunk)
+  resultBuffer = resultBuffer.slice()
+
+  const { size } = fs.statSync('./files/test.jpg')
+  console.log('size               ', size)
+  console.log('resultBuffer.length', resultBuffer.length)
+
+  fs.writeFileSync('./files/output-test.jpg', resultBuffer)
+
+  console.log('after end')
 }
 
 run()

@@ -5,8 +5,8 @@ import * as peerId from 'peer-id'
 
 import { config } from './config'
 import { createNode } from './services/create-node'
-import { parse } from './services/json-stream/parse'
-import { stringify } from './services/json-stream/stringify'
+
+const fileToRead = './files/test.jpg'
 
 const start = async () => {
   const [idDialer, idListener] = await Promise.all([
@@ -25,9 +25,12 @@ const start = async () => {
     console.log(' @@@@@@@@@@@@@ HANDLE @@@@@@@@@@@@@@ ')
     const sink = (pushable as any)()
 
-    pipe(sink, stringify, stream, parse, async (source) => {
-      for await (const message of source) {
-        console.log('message', message)
+    // pipe(sink, stringify, stream, parse, async (source) => {
+    pipe(sink, stream, async (source) => {
+      for await (const x of source) {
+        console.log('message', x.toString())
+
+        const message = x.toString().startsWith('{') ? JSON.parse(x) : x
 
         switch (message.type) {
           case 'GET_FILESIZE':
@@ -42,9 +45,26 @@ const start = async () => {
               break
             }
 
-            sink.push({
-              data: message.voucher,
-            })
+            const totalFileSize = fs.statSync(fileToRead).size
+            const offset = config.chunkSize * message.voucher
+            const alloc = config.chunkSize
+
+            let buffer = Buffer.alloc(alloc)
+
+            const fd = fs.openSync(fileToRead, 'r')
+            console.log('alloc', alloc, 'voucher', message.voucher)
+
+            fs.readSync(fd, buffer, 0, alloc, offset)
+
+            console.log('server read', buffer.slice(0, 10), buffer.slice(buffer.length - 10))
+            sink.push(buffer)
+            // sink.push({
+            //   voucher: message.voucher,
+            //   data: '1,', // buffer,
+            // })
+
+            fs.closeSync(fd)
+
             break
         }
       }
