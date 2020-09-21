@@ -11,7 +11,7 @@ export const sendMessage = async (stream, messageObject) => {
       // For each chunk of data
       for await (const data of source) {
         // Output the data
-        console.log('received echo:', data.toString())
+        console.log('---> received echo:', data.toString())
       }
     },
   )

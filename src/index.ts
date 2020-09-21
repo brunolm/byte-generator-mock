@@ -2,10 +2,9 @@ import * as fs from 'fs'
 import * as multiaddr from 'multiaddr'
 import * as peerId from 'peer-id'
 
+import { config } from './config'
 import { createNode } from './services/create-node'
 import { sendMessage } from './services/send-message'
-
-// /fil/simple-retrieval/0.1.0
 
 const start = async () => {
   const [idDialer, idListener] = await Promise.all([
@@ -20,7 +19,7 @@ const start = async () => {
     console.log('connected to: ', connection.remotePeer.toB58String())
   })
 
-  await node.handle('/fil/simple-retrieval/0.1.0', async ({ stream }) => {
+  await node.handle(config.protocolName, async ({ stream }) => {
     // streamToConsole(stream)
     console.log('stream', stream)
 

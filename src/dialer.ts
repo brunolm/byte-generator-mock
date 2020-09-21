@@ -1,5 +1,6 @@
 import * as multiaddr from 'multiaddr'
 import * as peerId from 'peer-id'
+import { config } from './config'
 
 import { createNode } from './services/create-node'
 import { sendMessage } from './services/send-message'
@@ -20,10 +21,9 @@ async function run() {
   })
 
   const listenerMa = multiaddr(`/ip4/127.0.0.1/tcp/3001/p2p/${idListener.toB58String()}`)
-  const { stream } = await nodeDialer.dialProtocol(listenerMa, '/fil/simple-retrieval/0.1.0')
+  const { stream } = await nodeDialer.dialProtocol(listenerMa, config.protocolName)
 
-  console.log('Dialer dialed to listener on protocol: /fil/simple-retrieval/0.1.0')
-  console.log('Type a message and see what happens')
+  console.log(`Dialer dialed to listener on protocol: ${config.protocolName}`)
 
   const actions = {
     getFileSize: {
