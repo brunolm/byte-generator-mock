@@ -1,10 +1,12 @@
 import * as fs from 'fs'
 import { pipe } from 'it-pipe'
-import * as pushable from 'it-pushable'
+import pushable from 'it-pushable'
 import * as peerId from 'peer-id'
 
 import { config } from './config'
+import { ActionTypes } from './services/action-types'
 import { createNode } from './services/create-node'
+import { ResponseCodes } from './services/response-codes'
 
 const fileToRead = './files/test.jpg'
 
@@ -28,16 +30,43 @@ const start = async () => {
     // pipe(sink, stringify, stream, parse, async (source) => {
     pipe(sink, stream, async (source) => {
       for await (const x of source) {
-        console.log('message', x.toString())
+        console.log('--> message -->', x.toString())
 
         const message = x.toString().startsWith('{') ? JSON.parse(x) : x
 
-        switch (message.type) {
-          case 'GET_FILESIZE':
-            sink.push({ size: fs.statSync(`files/${message.cid}`).size })
+        const fileToRead = `files/${message?.cid}`
+
+        console.log('REQUEST TYPE CODE:: ', message.request)
+
+        switch (message.request) {
+          case ActionTypes.ReqRespInitialize:
+            console.log('ActionTypes.ReqRespInitialize')
+            if (message?.cid && fs.existsSync(fileToRead)) {
+              console.log('CID & Exist')
+
+              sink.push(
+                JSON.stringify({
+                  type: 'response',
+                  response: ActionTypes.ReqRespInitialize,
+                  responseCode: ResponseCodes.Ok,
+                  totalBytes: fs.statSync(`files/${message.cid}`).size,
+                }),
+              )
+            } else {
+              sink.push(
+                JSON.stringify({
+                  type: 'response',
+                  response: ActionTypes.ReqRespInitialize,
+                  // 1 = ${ResponseCodeGeneralFailure:int} | 101 = ${ResponseCodeInitializeNoCid:int,
+                  responseCode: ResponseCodes.InitializeNoCid,
+                  errorMessage: 'Error: cannot whatever........',
+                }),
+              )
+            }
+
             break
 
-          case 'GET_CHUNK':
+          case ActionTypes.ReqRespTransfer:
             const validateVoucher = (x) => !x || +x >= 0
 
             if (!validateVoucher(message.voucher)) {
@@ -56,8 +85,20 @@ const start = async () => {
 
             fs.readSync(fd, buffer, 0, alloc, offset)
 
-            console.log('server read', buffer.slice(0, 10), buffer.slice(buffer.length - 10))
-            sink.push(buffer)
+            console.log('server read', buffer.slice(0, 5), buffer.slice(buffer.length - 5), 'length:', buffer.length)
+            // sink.push(buffer)
+
+            console.log('send buffer as base64')
+            sink.push(
+              JSON.stringify({
+                type: 'response',
+                response: ActionTypes.ReqRespTransfer,
+                responseCode: ResponseCodes.Ok,
+                data: buffer.toString('base64'),
+              }),
+            )
+            console.log('data sent!')
+
             // sink.push({
             //   voucher: message.voucher,
             //   data: '1,', // buffer,
@@ -69,6 +110,7 @@ const start = async () => {
         }
       }
 
+      console.log('sink end')
       sink.end()
     })
   })
